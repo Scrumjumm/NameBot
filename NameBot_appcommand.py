@@ -38,7 +38,7 @@ class MoveView(discord.ui.View):
 
         await interaction.response.edit_message(content="```Cool! Channel Updated!```", view=self)
 
-    @discord.ui.button(emoji="❌", style=discord.ButtonStyle.danger)
+    @discord.ui.button(emoji="✖️", style=discord.ButtonStyle.danger)
     async def buttonno_callback(self, interaction, button):
         for x in self.children:  # Still not 100% convinced this is most efficient
             x.disabled = True
@@ -130,3 +130,5 @@ async def on_member_update(before, after):
 
 # Token
 client.run(TOKEN)
+
+#testing if I can change things in pycharm without the entire git repository freaking out.
