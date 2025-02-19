@@ -6,6 +6,9 @@ from discord import app_commands
 from dotenv import load_dotenv
 import nest_asyncio
 
+import table2ascii as t2a
+import pandas as pd
+
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
@@ -19,7 +22,10 @@ client.tree = app_commands.CommandTree(client)
 class Server:
     def __init__(self,channel,users):
         self.channel = channel
-        self.users = users
+        for n in users:
+            self.users[n] = users
+
+            Servers[interaction.guild_id]
 Servers = {}  # Creating dictionary to store servers in
 
 # Setup (Views)
@@ -82,6 +88,8 @@ async def startcmd(interaction: discord.Interaction):
                 await interaction.response.send_message("```subunit\nERROR: I'm already active here!```")
         else:
             Servers[interaction.guild_id] = Server(interaction.channel, interaction.guild.members)
+            for n in interaction.guild.members:
+                print(n)
             # Rest of setup process
             await interaction.response.send_message(
                 "```Hi, I'm Name Bot! From now on, I'll be keeping you up to date on any name changes in the server!```")
@@ -124,11 +132,9 @@ async def on_member_update(before, after):
     global Servers
 
     if before.nick != after.nick:
-        await Servers[before.guild.id].channel.send("User " + after.global_name + " changed their nickname from "
+        await Servers[before.guild.id].channel.send(embed="User " + after.global_name + " changed their nickname from "
                                 + before.nick + " to " + after.nick + " !")  #Should probably do this as a embed like the rest
 
 
 # Token
 client.run(TOKEN)
-
-#testing if I can change things in pycharm without the entire git repository freaking out.
