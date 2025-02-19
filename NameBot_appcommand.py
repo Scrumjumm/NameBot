@@ -130,5 +130,3 @@ async def on_member_update(before, after):
 
 # Token
 client.run(TOKEN)
-
-#testing if I can change things in pycharm without the entire git repository freaking out.
