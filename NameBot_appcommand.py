@@ -6,8 +6,9 @@ from discord import app_commands
 from dotenv import load_dotenv
 import nest_asyncio
 
-import table2ascii as t2a
-import pandas as pd
+from table2ascii import Alignment, table2ascii as t2a
+from datetime import datetime #imports the datetime class from the module datetime. Way to overcomplicated it guys
+from PIL import Image, ImageDraw, ImageFont
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -20,12 +21,12 @@ client.tree = app_commands.CommandTree(client)
 
 # Setup (Classes & Objects)
 class Server:
-    def __init__(self,channel,users):
-        self.channel = channel
-        for n in users:
-            self.users[n] = users
+    def __init__(self, interaction):
+        self.channel = interaction.channel
+        self.users = {}
+        for n in interaction.guild.members:
+            self.users[n.global_name] = [[n.nick],[datetime.today().strftime('%Y-%m-%d')],['---']] #.[0] name, .[1] start-date, .[2] end-date
 
-            Servers[interaction.guild_id]
 Servers = {}  # Creating dictionary to store servers in
 
 # Setup (Views)
@@ -87,9 +88,8 @@ async def startcmd(interaction: discord.Interaction):
             else:
                 await interaction.response.send_message("```subunit\nERROR: I'm already active here!```")
         else:
-            Servers[interaction.guild_id] = Server(interaction.channel, interaction.guild.members)
-            for n in interaction.guild.members:
-                print(n)
+            Servers[interaction.guild_id] = Server(interaction)
+
             # Rest of setup process
             await interaction.response.send_message(
                 "```Hi, I'm Name Bot! From now on, I'll be keeping you up to date on any name changes in the server!```")
@@ -111,8 +111,26 @@ async def historycmd(interaction: discord.Interaction, user : discord.Member):
             await interaction.response.send_message(
                 "```subunit\nERROR: This isn't my update channel! If you want me to send updates from here now, ask your admin to use the /start command in this channel!```")
         else:
-            if user in Servers[interaction.guild_id].users:
-                await interaction.response.send_message('This will do something cool eventually, I swear')  # send an embed list!
+            if user.global_name in Servers[interaction.guild_id].users:
+                mat = Servers[interaction.guild_id].users[user.global_name]
+                transmat = [[mat[j][i]
+                            for j in range(len(mat))]
+                            for i in range(len(mat[0]))] #transposes nested list, don't ask me how
+                out = t2a(header=['Name','Born','Died'],
+                          body=transmat,
+                          alignments=Alignment.CENTER)
+
+                #img = Image.new('RGB', (400,1000))
+                #d = ImageDraw.Draw(img)
+                #d.text((20, 20),text=out, fill = (255,255,255))
+                #img.save("C:/Users/scram/Desktop/image.png") #This will throw errors anywhere but work!
+
+                embed = discord.Embed(title = user.global_name + ' Nickname History')
+                embed.add_field(name='',value=out)
+                #embed.set_image(img)
+
+
+                await interaction.response.send_message(embed= embed)  # send an embed list!
             else:
                 await interaction.response.send_message(
                     "```subunit\nERROR: The user you're looking for doesn't exist!```")
@@ -132,7 +150,13 @@ async def on_member_update(before, after):
     global Servers
 
     if before.nick != after.nick:
-        await Servers[before.guild.id].channel.send(embed="User " + after.global_name + " changed their nickname from "
+        Servers[before.guild.id].users[after.global_name][0].append(after.nick)
+        Servers[before.guild.id].users[after.global_name][1].append(datetime.today().strftime('%Y-%m-%d'))
+        Servers[before.guild.id].users[after.global_name][2].pop()
+        Servers[before.guild.id].users[after.global_name][2].append(datetime.today().strftime('%Y-%m-%d'))
+        Servers[before.guild.id].users[after.global_name][2].append('---')
+        print(Servers[before.guild.id].users[after.global_name])  #For debug
+        await Servers[before.guild.id].channel.send("User " + after.global_name + " changed their nickname from "
                                 + before.nick + " to " + after.nick + " !")  #Should probably do this as a embed like the rest
 
 
