@@ -8,7 +8,7 @@ import nest_asyncio
 
 from table2ascii import Alignment, table2ascii as t2a
 from datetime import datetime #imports the datetime class from the module datetime. Way to overcomplicated it guys
-from PIL import Image, ImageDraw, ImageFont
+import pickle
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -22,12 +22,16 @@ client.tree = app_commands.CommandTree(client)
 # Setup (Classes & Objects)
 class Server:
     def __init__(self, interaction):
-        self.channel = interaction.channel
+        self.channel = interaction.channel.id
         self.users = {}
         for n in interaction.guild.members:
-            self.users[n.global_name] = [[n.nick],[datetime.today().strftime('%Y-%m-%d')],['---']] #.[0] name, .[1] start-date, .[2] end-date
+            self.users[n.global_name] = [[n.nick],['???'],['---']] #.[0] name, .[1] start-date, .[2] end-date
 
-Servers = {}  # Creating dictionary to store servers in
+if os.path.isfile('Servers.pickle'):
+    with open('Servers.pickle', 'rb') as f:
+        Servers = pickle.load(f)
+else:
+    Servers = {}  # Creating dictionary to store servers in
 
 # Setup (Views)
 class MoveView(discord.ui.View):
@@ -41,7 +45,7 @@ class MoveView(discord.ui.View):
         for x in self.children:  # Still not 100% convinced this is most efficient
             x.disabled = True
 
-        Servers[interaction.guild_id].channel = interaction.channel
+        Servers[interaction.guild_id].channel = interaction.channel.id
 
         await interaction.response.edit_message(content="```Cool! Channel Updated!```", view=self)
 
@@ -53,9 +57,6 @@ class MoveView(discord.ui.View):
         await interaction.response.edit_message(content="```fine be that way see if I care```", view=self)
 
 class HistoryView(discord.ui.View):
-    #Want three columns: Name, Start Date, End Date
-    #Embed should be made of pages, each containing... let's say 10 entries?
-    #See the following links for inspo-- https://discordpy.readthedocs.io/en/latest/api.html#embed https://plainenglish.io/blog/send-an-embed-with-a-discord-bot-in-python https://stackoverflow.com/questions/63565825/how-to-make-data-to-be-shown-in-tabular-form-in-discord-py
     @discord.ui.button(label="⏮️", style=discord.ButtonStyle.primary)
     async def buttonfirst_callback(self, interaction, button):
         await interaction.response.edit_message(content="```yerp I still need to add this```", view=self)
@@ -81,7 +82,7 @@ async def startcmd(interaction: discord.Interaction):
     global Servers
     if interaction.user.guild_permissions.manage_channels:
         if interaction.guild_id in Servers:
-            if Servers[interaction.guild_id].channel != interaction.channel:
+            if Servers[interaction.guild_id].channel != interaction.channel.id:
                 await interaction.response.send_message(
                     "```Looks like this is different channel then the one I'm used to. Did you want me to move my updates to here?```",
                     view=MoveView())
@@ -107,7 +108,7 @@ async def startcmd(interaction: discord.Interaction):
 async def historycmd(interaction: discord.Interaction, user : discord.Member):
     global Servers
     if interaction.guild_id in Servers:
-        if Servers[interaction.guild_id].channel != interaction.channel:
+        if Servers[interaction.guild_id].channel != interaction.channel.id:
             await interaction.response.send_message(
                 "```subunit\nERROR: This isn't my update channel! If you want me to send updates from here now, ask your admin to use the /start command in this channel!```")
         else:
@@ -120,23 +121,39 @@ async def historycmd(interaction: discord.Interaction, user : discord.Member):
                           body=transmat,
                           alignments=Alignment.CENTER)
 
-                #img = Image.new('RGB', (400,1000))
-                #d = ImageDraw.Draw(img)
-                #d.text((20, 20),text=out, fill = (255,255,255))
-                #img.save("C:/Users/scram/Desktop/image.png") #This will throw errors anywhere but work!
+                try:
+                    #Still think ImageDraw could work, just need a monospace font.
+                    #Might also want to pad the headers to the max length of each column
+                    #That way, don't have to worry about centering in image changing
 
-                embed = discord.Embed(title = user.global_name + ' Nickname History')
-                embed.add_field(name='',value=out)
-                #embed.set_image(img)
+                    # img = Image.new('RGB', (400,1000))
+                    # d = ImageDraw.Draw(img)
+                    # d.text((20, 20),text=out, fill = (255,255,255))
 
+                    #embed = discord.Embed(title=user.global_name + ' Nickname History')
+                    # embed.set_image(img)
 
-                await interaction.response.send_message(embed= embed)  # send an embed list!
+                    await interaction.response.send_message(f'```{out}```')  # send an embed list!
+                except:
+                    await interaction.response.send_message("```subunit\nERROR: User doesn't apply (most likely they're a bot)!```")
+
             else:
                 await interaction.response.send_message(
                     "```subunit\nERROR: The user you're looking for doesn't exist!```")
     else:
         await interaction.response.send_message(
             "```subunit\nERROR: Looks like I haven't been set up in this server yet! Ask your admin to use the /start command!```")
+
+# Functions
+def save():  # Going to need to figure out how to make this work on server (assuming there's issues)
+    global Servers
+    if os.path.isfile('Servers.pickle'):
+        with open('Servers.pickle', 'rb') as f:
+            backup = pickle.load(f)
+        with open('backup.pickle', 'wb') as f:
+            pickle.dump(backup, f)
+    with open('Servers.pickle', 'wb') as f:
+        pickle.dump(Servers, f)
 
 
 # Discord End
@@ -155,9 +172,11 @@ async def on_member_update(before, after):
         Servers[before.guild.id].users[after.global_name][2].pop()
         Servers[before.guild.id].users[after.global_name][2].append(datetime.today().strftime('%Y-%m-%d'))
         Servers[before.guild.id].users[after.global_name][2].append('---')
-        print(Servers[before.guild.id].users[after.global_name])  #For debug
-        await Servers[before.guild.id].channel.send("User " + after.global_name + " changed their nickname from "
-                                + before.nick + " to " + after.nick + " !")  #Should probably do this as a embed like the rest
+        save()
+
+        out = "User " + after.global_name + " changed their nickname from " + before.nick + " to " + after.nick + " !"
+        channel = client.get_channel(Servers[before.guild.id].channel)
+        await channel.send(f'```{out}```')  #Should probably do this as a embed like the rest
 
 
 # Token
