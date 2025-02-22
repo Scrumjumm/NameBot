@@ -1,13 +1,15 @@
 # Setup (Imports)
 import os
+import io
 
 import discord
 from discord import app_commands
 from dotenv import load_dotenv
 import nest_asyncio
 
-from table2ascii import Alignment, table2ascii as t2a
-from datetime import datetime #imports the datetime class from the module datetime. Way to overcomplicated it guys
+from table2ascii import Alignment, PresetStyle, table2ascii as t2a
+from PIL import Image, ImageFont, ImageDraw
+from datetime import datetime
 import pickle
 
 load_dotenv()
@@ -25,13 +27,17 @@ class Server:
         self.channel = interaction.channel.id
         self.users = {}
         for n in interaction.guild.members:
-            self.users[n.global_name] = [[n.nick],['???'],['---']] #.[0] name, .[1] start-date, .[2] end-date
+            if n.nick is None:
+                self.users[n.global_name] = [[n.global_name], ['???'], ['---']]  # .[0] name, .[1] start-date, .[2] end-date
+            else:
+                self.users[n.global_name] = [[n.nick],['???'],['---']] #.[0] name, .[1] start-date, .[2] end-date
 
 if os.path.isfile('Servers.pickle'):
     with open('Servers.pickle', 'rb') as f:
         Servers = pickle.load(f)
+        print('🦍')
 else:
-    Servers = {}  # Creating dictionary to store servers in
+    Servers = {}
 
 # Setup (Views)
 class MoveView(discord.ui.View):
@@ -42,7 +48,7 @@ class MoveView(discord.ui.View):
     async def buttonyes_callback(self, interaction, button):
         global Servers
 
-        for x in self.children:  # Still not 100% convinced this is most efficient
+        for x in self.children:
             x.disabled = True
 
         Servers[interaction.guild_id].channel = interaction.channel.id
@@ -51,12 +57,15 @@ class MoveView(discord.ui.View):
 
     @discord.ui.button(emoji="✖️", style=discord.ButtonStyle.danger)
     async def buttonno_callback(self, interaction, button):
-        for x in self.children:  # Still not 100% convinced this is most efficient
+        for x in self.children:
             x.disabled = True
 
         await interaction.response.edit_message(content="```fine be that way see if I care```", view=self)
 
 class HistoryView(discord.ui.View):
+    def __init__(self, timeout=360):
+        super().__init__(timeout=timeout)
+
     @discord.ui.button(label="⏮️", style=discord.ButtonStyle.primary)
     async def buttonfirst_callback(self, interaction, button):
         await interaction.response.edit_message(content="```yerp I still need to add this```", view=self)
@@ -77,7 +86,7 @@ class HistoryView(discord.ui.View):
 @client.tree.command(
     name="start",
     description="Specifies the channel for Name Bot to talk in",
-    guild=discord.Object(id=884316913218519050))  #Need to get rid of guild part soon
+    guild=discord.Object(id=884316913218519050))  #NEED TO GET RID OF THIS
 async def startcmd(interaction: discord.Interaction):
     global Servers
     if interaction.user.guild_permissions.manage_channels:
@@ -117,23 +126,24 @@ async def historycmd(interaction: discord.Interaction, user : discord.Member):
                 transmat = [[mat[j][i]
                             for j in range(len(mat))]
                             for i in range(len(mat[0]))] #transposes nested list, don't ask me how
-                out = t2a(header=['Name','Born','Died'],
+                out = t2a(header=['              Name              ','   Born   ','   Died   '],
                           body=transmat,
+                          style=PresetStyle.thick_box,
                           alignments=Alignment.CENTER)
+                print(out)
 
                 try:
-                    #Still think ImageDraw could work, just need a monospace font.
-                    #Might also want to pad the headers to the max length of each column
-                    #That way, don't have to worry about centering in image changing
+                    img = Image.new('RGB', (707,629)) #Keeping horizontal consistent, but WILL need to adjust vertical
+                    font = ImageFont.truetype("JetBrainsMono-Regular.ttf",13)
+                    d = ImageDraw.Draw(img)
+                    d.text((5, 5),font=font, text=out, fill = (255,255,255))
+                    img.save("history.png")
 
-                    # img = Image.new('RGB', (400,1000))
-                    # d = ImageDraw.Draw(img)
-                    # d.text((20, 20),text=out, fill = (255,255,255))
 
-                    #embed = discord.Embed(title=user.global_name + ' Nickname History')
-                    # embed.set_image(img)
+                    embed = discord.Embed(title=user.global_name + ' Nickname History')
+                    embed.set_image(url = "attachment://history.png")
+                    await interaction.response.send_message(file=discord.File("history.png"), embed=embed)
 
-                    await interaction.response.send_message(f'```{out}```')  # send an embed list!
                 except:
                     await interaction.response.send_message("```subunit\nERROR: User doesn't apply (most likely they're a bot)!```")
 
@@ -167,16 +177,25 @@ async def on_member_update(before, after):
     global Servers
 
     if before.nick != after.nick:
-        Servers[before.guild.id].users[after.global_name][0].append(after.nick)
-        Servers[before.guild.id].users[after.global_name][1].append(datetime.today().strftime('%Y-%m-%d'))
+        if before.nick is None:
+            bnick = before.global_name
+        else:
+            bnick = before.nick
+        if after.nick is None:
+            anick = after.global_name
+        else:
+            anick = after.nick
+
+        Servers[before.guild.id].users[after.global_name][0].append(anick)
+        Servers[before.guild.id].users[after.global_name][1].append(datetime.today().strftime('%d-%m-%Y'))
         Servers[before.guild.id].users[after.global_name][2].pop()
-        Servers[before.guild.id].users[after.global_name][2].append(datetime.today().strftime('%Y-%m-%d'))
+        Servers[before.guild.id].users[after.global_name][2].append(datetime.today().strftime('%d-%m-%Y'))
         Servers[before.guild.id].users[after.global_name][2].append('---')
         save()
 
-        out = "User " + after.global_name + " changed their nickname from " + before.nick + " to " + after.nick + " !"
+        out = "User " + after.global_name + " changed their nickname from " + bnick + " to " + anick + " !"
         channel = client.get_channel(Servers[before.guild.id].channel)
-        await channel.send(f'```{out}```')  #Should probably do this as a embed like the rest
+        await channel.send(f'```{out}```')
 
 
 # Token
