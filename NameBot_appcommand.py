@@ -7,7 +7,6 @@ from discord import app_commands
 from dotenv import load_dotenv
 import nest_asyncio
 
-from table2ascii import Alignment, PresetStyle, table2ascii as t2a
 from PIL import Image, ImageFont, ImageDraw
 from datetime import datetime
 import pickle
@@ -35,7 +34,6 @@ class Server:
 if os.path.isfile('Servers.pickle'):
     with open('Servers.pickle', 'rb') as f:
         Servers = pickle.load(f)
-        print('🦍')
 else:
     Servers = {}
 
@@ -112,7 +110,7 @@ async def startcmd(interaction: discord.Interaction):
 @client.tree.command(
     name="history",
     description="Lists all current and previous names of the given user",
-    guild=discord.Object(id=884316913218519050))
+    guild=discord.Object(id=884316913218519050))  #NEED TO GET RID OF THIS
 @app_commands.describe(user='The user to look up')
 async def historycmd(interaction: discord.Interaction, user : discord.Member):
     global Servers
@@ -126,19 +124,21 @@ async def historycmd(interaction: discord.Interaction, user : discord.Member):
                 transmat = [[mat[j][i]
                             for j in range(len(mat))]
                             for i in range(len(mat[0]))] #transposes nested list, don't ask me how
-                out = t2a(header=['              Name              ','   Born   ','   Died   '],
-                          body=transmat,
-                          style=PresetStyle.thick_box,
-                          alignments=Alignment.CENTER)
-                print(out)
+
 
                 try:
-                    img = Image.new('RGB', (707,629)) #Keeping horizontal consistent, but WILL need to adjust vertical
-                    font = ImageFont.truetype("JetBrainsMono-Regular.ttf",13)
+                    img = Image.open('history_bg.png') #Keeping horizontal consistent, but WILL need to adjust vertical
+                    font = ImageFont.truetype("arialbd-COLR.ttf",34)
                     d = ImageDraw.Draw(img)
-                    d.text((5, 5),font=font, text=out, fill = (255,255,255))
-                    img.save("history.png")
 
+                    for i in range (len(transmat)):
+                        y = 108*(i+1) +95
+                        d.text((447, y), font=font, text=transmat[i][0], fill=(255,255,255), anchor="mm", embedded_color=True)
+                        d.text((1023, y), font=font, text=transmat[i][1], fill=(255,255,255), anchor="mm", embedded_color=True)
+                        d.text((1335, y), font=font, text=transmat[i][2], fill=(255,255,255), anchor="mm", embedded_color=True)
+
+
+                    img.save("history.png")
 
                     embed = discord.Embed(title=user.global_name + ' Nickname History')
                     embed.set_image(url = "attachment://history.png")
