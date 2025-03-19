@@ -1,5 +1,8 @@
+#NOTE TO SELF: Servers.pickle, backup.pickle, history.png, and arialbd-COLR.tff should be removed from public build
+
 # Setup (Imports)
 import os
+import math
 import io
 
 import discord
@@ -16,9 +19,10 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 nest_asyncio.apply()
 
-intents = discord.Intents(message_content = True, members = True, guilds = True)
+intents = discord.Intents(message_content=True, members=True, guilds=True)
 client = discord.Client(intents=intents)
 client.tree = app_commands.CommandTree(client)
+
 
 # Setup (Classes & Objects)
 class Server:
@@ -27,15 +31,87 @@ class Server:
         self.users = {}
         for n in interaction.guild.members:
             if n.nick is None:
-                self.users[n.global_name] = [[n.global_name], ['???'], ['---']]  # .[0] name, .[1] start-date, .[2] end-date
+                self.users[n.global_name] = [[n.global_name], ['???'],
+                                             ['---']]  # .[0] name, .[1] start-date, .[2] end-date
             else:
-                self.users[n.global_name] = [[n.nick],['???'],['---']] #.[0] name, .[1] start-date, .[2] end-date
+                self.users[n.global_name] = [[n.nick], ['???'], ['---']]  #.[0] name, .[1] start-date, .[2] end-date
+
 
 if os.path.isfile('Servers.pickle'):
     with open('Servers.pickle', 'rb') as f:
         Servers = pickle.load(f)
 else:
     Servers = {}
+
+
+# Functions
+def save():  # Going to need to figure out how to make this work on server (assuming there's issues)
+    global Servers
+    if os.path.isfile('Servers.pickle'):
+        with open('Servers.pickle', 'rb') as f:
+            backup = pickle.load(f)
+        with open('backup.pickle', 'wb') as f:
+            pickle.dump(backup, f)
+    with open('Servers.pickle', 'wb') as f:
+        pickle.dump(Servers, f)
+
+
+def historyfunc(interaction, name, ind):
+    global Servers
+    txt = []
+    embed = []  # Might want empty discord embed instead
+    file = []
+    if interaction.guild_id in Servers:
+        if Servers[interaction.guild_id].channel != interaction.channel.id:
+            txt = "```subunit\nERROR: This isn't my update channel! If you want me to send updates from here now, ask your admin to use the /start command in this channel!```"
+        else:
+            if name in Servers[interaction.guild_id].users:
+                mat = Servers[interaction.guild_id].users[name]
+                transmat = [[mat[j][i]
+                             for j in range(len(mat))]
+                            for i in range(len(mat[0]))]  # transposes nested list, don't ask me how
+
+                img = Image.open('history_bg.png')  # Keeping horizontal consistent, but MAY want to adjust vertical
+                font = ImageFont.truetype("arialbd-COLR.ttf", 34)
+                d = ImageDraw.Draw(img)
+
+                st = len(transmat) - (10 * ind + 1)
+                en = st - 9
+                if en < 0:
+                    en = 0
+
+                print(st, en)
+                print(len(transmat))
+                #print(transmat[:][0])
+                #print(transmat[en:st][0])
+                try:
+                    inc = 0
+                    for i in range(st, en-1, -1):   # en-1 since range is exclusive for end
+                        y = 108 * (inc + 1) + 95
+                        d.text((447, y), font=font, text=transmat[i][0], fill=(255, 255, 255), anchor="mm",
+                               embedded_color=True)
+                        d.text((1023, y), font=font, text=transmat[i][1], fill=(255, 255, 255), anchor="mm",
+                               embedded_color=True)
+                        d.text((1335, y), font=font, text=transmat[i][2], fill=(255, 255, 255), anchor="mm",
+                               embedded_color=True)
+                        inc += 1
+
+                    file = "history" + name + ".png"
+                    img.save(file)  #This is going to need to change to be different for each individual
+
+                    embed = discord.Embed(title=name + ' Nickname History')
+                    embed.set_image(url="attachment://" + file)
+
+                except:
+                    txt = "```subunit\nERROR: User doesn't apply (most likely they're a bot)!```"
+
+            else:
+                txt = "```subunit\nERROR: The user you're looking for doesn't exist!```"
+    else:
+        txt = "```subunit\nERROR: Looks like I haven't been set up in this server yet! Ask your admin to use the /start command!```"
+
+    return txt, embed, file
+
 
 # Setup (Views)
 class MoveView(discord.ui.View):
@@ -60,25 +136,79 @@ class MoveView(discord.ui.View):
 
         await interaction.response.edit_message(content="```fine be that way see if I care```", view=self)
 
-class HistoryView(discord.ui.View):
-    def __init__(self, timeout=360):
-        super().__init__(timeout=timeout)
 
-    @discord.ui.button(label="⏮️", style=discord.ButtonStyle.primary)
-    async def buttonfirst_callback(self, interaction, button):
-        await interaction.response.edit_message(content="```yerp I still need to add this```", view=self)
+def HistoryMenu(pgs, ind, name, disable):  # REMEMBER NAME IS DIFFERENT FROM PERSON INTERACTING, HENCE NEED FOR VARIABLE
+    #  Probably don't need to nest the class in a function anymore (why can I pass some variables but not others?)
+    global Servers
+    class HistoryView(discord.ui.View):
+        def __init__(self, pgs, ind, timeout=360):
+            super().__init__(timeout=timeout)
+            self.ind = ind
+            self.pgs = pgs
 
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary)
-    async def buttonback_callback(self, interaction, button):
-        await interaction.response.edit_message(content="```yerp I still need to add this```", view=self)
+        @discord.ui.button(label="⏮️", style=discord.ButtonStyle.primary, disabled=disable[0])
+        async def buttonfirst_callback(self, interaction, button):
+            self.ind = 0
+            [], embed, file = historyfunc(interaction, name, self.ind)  #At this point assuming txt should be blank
 
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary)
-    async def buttonforward_callback(self, interaction, button):
-        await interaction.response.edit_message(content="```yerp I still need to add this```", view=self)
+            inc = 0
+            for x in self.children:  # THERE's NO WAY THIS IS PYTHONIC
+                if inc < 2:
+                    x.disabled = self.ind == 0  #Match boolean
+                else:
+                    x.disabled = self.ind == self.pgs  #Match boolean (could replace preallocated disabled with this?)
+                inc += 1
 
-    @discord.ui.button(label="⏭️", style=discord.ButtonStyle.primary)
-    async def buttonlast_callback(self, interaction, button):
-        await interaction.response.edit_message(content="```yerp I still need to add this```", view=self)
+            await interaction.response.edit_message(attachments=[discord.File(file)], embed=embed, view=self)
+
+
+        @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary, disabled=disable[1])
+        async def buttonback_callback(self, interaction, button):
+            self.ind += -1
+            [], embed, file = historyfunc(interaction, name, self.ind)  # At this point assuming txt should be blank
+
+            inc = 0
+            for x in self.children:  # THERE's NO WAY THIS IS PYTHONIC
+                if inc < 2:
+                    x.disabled = self.ind == 0  #Match boolean
+                else:
+                    x.disabled = self.ind == self.pgs  #Match boolean (could replace preallocated disabled with this?)
+                inc += 1
+
+            await interaction.response.edit_message(attachments=[discord.File(file)], embed=embed, view=self)
+
+        @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, disabled=disable[2])
+        async def buttonforward_callback(self, interaction, button):
+            self.ind += 1
+            [], embed, file = historyfunc(interaction, name, self.ind)  # At this point assuming txt should be blank
+
+            inc = 0
+            for x in self.children:  # THERE's NO WAY THIS IS PYTHONIC
+                if inc < 2:
+                    x.disabled = self.ind == 0  #Match boolean
+                else:
+                    x.disabled = self.ind == self.pgs  #Match boolean (could replace preallocated disabled with this?)
+                inc += 1
+
+            await interaction.response.edit_message(attachments=[discord.File(file)], embed=embed, view=self)
+
+        @discord.ui.button(label="⏭️", style=discord.ButtonStyle.primary, disabled=disable[3])
+        async def buttonlast_callback(self, interaction, button):
+            self.ind = self.pgs
+            [], embed, file = historyfunc(interaction, name, self.ind)  # At this point assuming txt should be blank
+
+            inc = 0
+            for x in self.children:  # THERE's NO WAY THIS IS PYTHONIC
+                if inc < 2:
+                    x.disabled = self.ind == 0  #Match boolean
+                else:
+                    x.disabled = self.ind == self.pgs  #Match boolean (could replace preallocated disabled with this?)
+                inc += 1
+
+            await interaction.response.edit_message(attachments=[discord.File(file)], embed=embed, view=self)
+
+    return HistoryView(pgs, ind)
+
 
 # Setup (Commands)
 @client.tree.command(
@@ -92,9 +222,9 @@ async def startcmd(interaction: discord.Interaction):
             if Servers[interaction.guild_id].channel != interaction.channel.id:
                 await interaction.response.send_message(
                     "```Looks like this is different channel then the one I'm used to. Did you want me to move my updates to here?```",
-                    view=MoveView())
+                    view=MoveView(), ephemeral=True)
             else:
-                await interaction.response.send_message("```subunit\nERROR: I'm already active here!```")
+                await interaction.response.send_message("```subunit\nERROR: I'm already active here!```", ephemeral=True)
         else:
             Servers[interaction.guild_id] = Server(interaction)
 
@@ -104,7 +234,7 @@ async def startcmd(interaction: discord.Interaction):
 
     else:
         await interaction.response.send_message(
-            "```subunit\nERROR: You don't have the right to do that. Just what are you trying?```")
+            "```subunit\nERROR: You don't have the right to do that. Just what are you trying?```", ephemeral=True)
 
 
 @client.tree.command(
@@ -112,58 +242,23 @@ async def startcmd(interaction: discord.Interaction):
     description="Lists all current and previous names of the given user",
     guild=discord.Object(id=884316913218519050))  #NEED TO GET RID OF THIS
 @app_commands.describe(user='The user to look up')
-async def historycmd(interaction: discord.Interaction, user : discord.Member):
+async def historycmd(interaction: discord.Interaction, user: discord.Member):
     global Servers
-    if interaction.guild_id in Servers:
-        if Servers[interaction.guild_id].channel != interaction.channel.id:
-            await interaction.response.send_message(
-                "```subunit\nERROR: This isn't my update channel! If you want me to send updates from here now, ask your admin to use the /start command in this channel!```")
-        else:
-            if user.global_name in Servers[interaction.guild_id].users:
-                mat = Servers[interaction.guild_id].users[user.global_name]
-                transmat = [[mat[j][i]
-                            for j in range(len(mat))]
-                            for i in range(len(mat[0]))] #transposes nested list, don't ask me how
-
-
-                try:
-                    img = Image.open('history_bg.png') #Keeping horizontal consistent, but WILL need to adjust vertical
-                    font = ImageFont.truetype("arialbd-COLR.ttf",34)
-                    d = ImageDraw.Draw(img)
-
-                    for i in range (len(transmat)):
-                        y = 108*(i+1) +95
-                        d.text((447, y), font=font, text=transmat[i][0], fill=(255,255,255), anchor="mm", embedded_color=True)
-                        d.text((1023, y), font=font, text=transmat[i][1], fill=(255,255,255), anchor="mm", embedded_color=True)
-                        d.text((1335, y), font=font, text=transmat[i][2], fill=(255,255,255), anchor="mm", embedded_color=True)
-
-
-                    img.save("history.png")
-
-                    embed = discord.Embed(title=user.global_name + ' Nickname History')
-                    embed.set_image(url = "attachment://history.png")
-                    await interaction.response.send_message(file=discord.File("history.png"), embed=embed)
-
-                except:
-                    await interaction.response.send_message("```subunit\nERROR: User doesn't apply (most likely they're a bot)!```")
-
-            else:
-                await interaction.response.send_message(
-                    "```subunit\nERROR: The user you're looking for doesn't exist!```")
+    print(len(Servers[interaction.guild_id].users[user.global_name][0]))
+    print(Servers[interaction.guild_id].users[user.global_name][0])
+    pgs = math.floor(len(Servers[interaction.guild_id].users[user.global_name][0]) / 10)
+    ind = 0
+    if pgs == 0:
+        disable = [True, True, True, True]
     else:
-        await interaction.response.send_message(
-            "```subunit\nERROR: Looks like I haven't been set up in this server yet! Ask your admin to use the /start command!```")
+        disable = [True, True, False, False]
 
-# Functions
-def save():  # Going to need to figure out how to make this work on server (assuming there's issues)
-    global Servers
-    if os.path.isfile('Servers.pickle'):
-        with open('Servers.pickle', 'rb') as f:
-            backup = pickle.load(f)
-        with open('backup.pickle', 'wb') as f:
-            pickle.dump(backup, f)
-    with open('Servers.pickle', 'wb') as f:
-        pickle.dump(Servers, f)
+    txt, embed, file = historyfunc(interaction, user.global_name, ind)
+
+    if txt:
+        await interaction.response.send_message(txt, ephemeral=True)
+    else:
+        await interaction.response.send_message(file=discord.File(file), embed=embed, view=HistoryMenu(pgs, ind, user.global_name, disable), ephemeral=True)
 
 
 # Discord End
@@ -171,6 +266,7 @@ def save():  # Going to need to figure out how to make this work on server (assu
 async def on_ready():
     print(f'{client.user} has connected to Discord!')
     await client.tree.sync(guild=discord.Object(id=884316913218519050))
+
 
 @client.event
 async def on_member_update(before, after):
