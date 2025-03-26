@@ -13,6 +13,8 @@ import pickle
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')  # Need to supply your own Discord Token, placed in .env in same directory.
+ID = os.getenv('GUILD_ID')  # ID for a guild to initialize global sync in. Place in .env
+AUTHOR = os.getenv('AUTHOR_ID')  # ID for bot author. Failsafe in global sync. Place in .env
 
 nest_asyncio.apply()
 
@@ -235,6 +237,18 @@ async def historycmd(interaction: discord.Interaction, user: discord.Member):
     else:
         await interaction.response.send_message(file=discord.File(file), embed=embed,
                                                 view=HistoryMenu(pgs, ind, user.global_name, disable), ephemeral=True)
+
+
+@client.tree.command(
+    name="sync",
+    description="sync /commands for all active servers",
+    guild=discord.Object(id=ID))
+async def slashsync(interaction: discord.Interaction):
+    if interaction.user.id == AUTHOR:
+        await client.tree.sync()
+        await interaction.response.send_message('/ Commands synced! Check back in a bit to confirm!', ephemeral=True)
+    else:
+        await interaction.response.send_message('You\'re not my dad!', ephemeral=True)
 
 
 # Discord End
