@@ -244,7 +244,7 @@ async def historycmd(interaction: discord.Interaction, user: discord.Member):
     description="sync /commands for all active servers",
     guild=discord.Object(id=ID))
 async def slashsync(interaction: discord.Interaction):
-    if interaction.user.id == AUTHOR:
+    if str(interaction.user.id) == AUTHOR:
         await client.tree.sync()
         await interaction.response.send_message('/ Commands synced! Check back in a bit to confirm!', ephemeral=True)
     else:
